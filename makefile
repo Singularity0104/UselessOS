@@ -1,4 +1,4 @@
-all: boot write
+prepare: boot write
 
 boot: boot.asm
 	nasm -f bin boot.asm -o boot.bin
@@ -12,7 +12,7 @@ mount:
 umount:
 	sudo umount ./file
 
-run: all
+run: prepare
 	bochs -f bochsrc
 
 recreate:

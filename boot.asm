@@ -5,6 +5,8 @@ BaseOfLoader equ 0x9000
 OffsetOfLoader equ 0x0100
 RootDirSectors equ 14
 SectorNoOfRootDirectory equ 19
+SectorNoOfFAT1 equ 1
+DetlaSectorNo equ 17
 
 
 jmp short START
@@ -92,10 +94,47 @@ NO_LOADER:
 	call DISPLAY
 	jmp $
 FILENAME_FOUND:
+	mov ax, MassageBooting
+	mov cx, 7
+	call DISPLAY
+
+	mov ax, RootDirSectors
+	and di, 0xffe0
+	add di, 0x1a
+	mov cx, word [es:di]
+	push cx
+	add cx, ax
+	add cx, DetlaSectorNo
+	mov ax, BaseOfLoader
+	mov es, ax
+	mov bx, OffsetOfLoader
+	mov ax, cx
+GO_ON_LOADING_FILE:
+	push ax
+	push bx
+	mov ah, 0xe
+	mov al, '.'
+	mov bl, 0xf
+	int 0x10
+	pop bx
+	pop ax
+	mov cl, 1
+	call READ_SECTOR
+	pop ax	
+	call GET_FAT_ENTRY
+	cmp ax, 0xfff
+	jz FILE_LOADED
+	push ax
+	mov dx, RootDirSectors
+	add ax, dx
+	add ax, DetlaSectorNo
+	add bx, [BPB_BytsPerSec]
+	jmp GO_ON_LOADING_FILE
+FILE_LOADED:
 	mov ax, MassageLoader
 	mov cx, 14
 	call DISPLAY
-	jmp $
+	jmp BaseOfLoader:OffsetOfLoader
 
 READ_SECTOR:
 	push bp
@@ -122,8 +161,51 @@ READING:
 	pop bp
 	ret
 
+GET_FAT_ENTRY:
+	push es
+	push bx
+	push ax
+	mov ax, BaseOfLoader
+	sub ax, 0x100
+	mov es, ax
+	pop ax
+	mov byte [bodd], 0
+	mov bx, 3
+	mul bx
+	mov bx, 2
+	div bx
+	cmp dx, 0
+	jz EVEN
+	mov byte [bodd], 1
+EVEN:
+	xor dx, dx
+	mov bx, [BPB_BytsPerSec]
+	div bx
+	push dx
+	mov bx, 0
+	add ax, SectorNoOfFAT1
+	mov cl, 2
+	call READ_SECTOR
+	pop dx
+	add bx, dx
+	mov ax, [es:bx]
+	cmp byte [bodd], 1
+	jnz EVEN_2
+	shr ax, 4
+EVEN_2:
+	and ax, 0xfff
+GET_FAT_ENTRY_OK:
+	pop bx
+	pop es
+	ret
+
 DISPLAY:
 	push bp
+	push ax
+	push ds
+	push es
+	push bx
+	push dx
 	mov bp, ax
 	mov ax, ds
 	mov es, ax
@@ -131,6 +213,11 @@ DISPLAY:
 	mov bx, 0x7
 	mov dl, 0
 	int 0x10
+	pop dx
+	pop bx
+	pop es
+	pop ds
+	pop ax
 	pop bp
 	ret
 
